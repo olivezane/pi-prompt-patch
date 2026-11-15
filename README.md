@@ -4,7 +4,7 @@ Edit Pi's system prompt in your editor; the change is stored as a small, line-an
 that keeps applying after Pi upgrades.
 
 ```bash
-pi install ~/Github/pi-prompt-patch     # or: pi -e ~/Github/pi-prompt-patch
+pi install ~/GitHub/pi-prompt-patch     # or: pi -e ~/GitHub/pi-prompt-patch
 ```
 
 ## Commands
