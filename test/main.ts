@@ -1,6 +1,5 @@
 /**
- * Self-check for ../system-prompt-patch.ts. Run: bun ~/.pi/agent/extensions/system-prompt-patch.test/main.ts
- * Not auto-loaded by Pi (only `extensions/*.ts` and subdirs with index.ts/package.json are).
+ * Self-check for ../extensions/system-prompt-patch.ts. Run: bun test/main.ts
  */
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
