@@ -4,11 +4,8 @@ Edit Pi's system prompt in your editor; the change is stored as a small, line-an
 that keeps applying after Pi upgrades.
 
 ```bash
-pi install ./pi-prompt-patch        # or, for one run: pi -e ./pi-prompt-patch
+pi install git:github.com/olivezane/pi-prompt-patch
 ```
-
-Replace the path with the git source once the repository is public:
-`pi install git:github.com/<owner>/pi-prompt-patch`.
 
 ## Commands
 
