@@ -1,0 +1,17 @@
+{
+  "name": "pi-prompt-patch",
+  "version": "0.1.0",
+  "description": "Edit Pi's system prompt in an editor and keep the change as a patch that survives Pi upgrades",
+  "type": "module",
+  "keywords": ["pi-package", "pi-extension", "system-prompt"],
+  "license": "MIT",
+  "pi": {
+    "extensions": ["./extensions/system-prompt-patch.ts"]
+  },
+  "scripts": {
+    "test": "bun test/main.ts"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-tui": "*"
+  }
+}
