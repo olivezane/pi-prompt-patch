@@ -7,10 +7,17 @@ that keeps applying after Pi upgrades.
 pi install git:github.com/olivezane/pi-prompt-patch
 ```
 
+Works on its own or inside a [pi-presets](https://github.com/olivezane/pi-presets) preset:
+
+```bash
+/preset add web git:github.com/olivezane/pi-prompt-patch
+```
+
 ## Commands
 
 - `/prompt-patch` — open the prompt in the editor. Saving writes the difference as ops to
-  `~/.pi/agent/prompt-patch/system-prompt-patch.json`. When the existing patch still applies,
+  `~/.pi/agent/prompt-patch/system-prompt-patch.json` (per preset when pi-presets is used).
+  When the existing patch still applies,
   the editor starts from the patched prompt, so edits build on each other; when it no longer
   applies, you get a warning and the default prompt instead.
 - `/prompt-show` — scroll through the exact system prompt the next message will send
@@ -44,9 +51,23 @@ pi install git:github.com/olivezane/pi-prompt-patch
 `find`/`replace` take a string or an array of lines (joined with `\n`); a missing `replace`
 deletes. Generated ops use line arrays and carry a few lines of context.
 
-Data lives in `~/.pi/agent/prompt-patch/`; set `PI_SYSTEM_PROMPT_PATCH_DIR` to point elsewhere
-(e.g. a project-local directory). Patch files written by older installs next to a loose extension
+Data lives in `~/.pi/agent/prompt-patch/`; `PI_CODING_AGENT_DIR` moves the `~/.pi/agent` part, and
+`PI_SYSTEM_PROMPT_PATCH_DIR` overrides the whole directory (e.g. a project-local one).
+Patch files written by older installs next to a loose extension
 in `~/.pi/agent/extensions/` keep working until you move them.
+
+## Presets
+
+If `~/.pi/agent/presets.json` exists, the patch follows the active preset:
+`prompt-patch/<preset>/system-prompt-patch.json`. Each scenario keeps its own prompt, and
+switching presets switches the patch with it.
+
+- A preset with no patch of its own keeps using the global
+  `prompt-patch/system-prompt-patch.json`; the first save under that preset forks the result
+  into `prompt-patch/<preset>/` and leaves the global file alone.
+- No presets.json (standalone) means exactly the global file, as before.
+- The base-prompt fingerprint (`…state.json`) is per preset, so each one gets its own
+  "Pi changed its prompt" notice.
 
 Run `/reload` after installing so the commands show up.
 
@@ -58,4 +79,5 @@ bun test/main.ts
 
 The test drives the extension through a fake Pi: normal apply, broken anchors, delete ops,
 invalid JSON, upgrade notices, editor round-trips, hidden sections, the read-only pager, and a
-fuzz round-trip over random edits.
+fuzz round-trip over random edits. It also checks that the patch follows `presets.json` —
+standalone, inherited from the global file, and forked per preset on save.

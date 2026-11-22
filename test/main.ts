@@ -2,9 +2,9 @@
  * Self-check for ../extensions/system-prompt-patch.ts. Run: bun test/main.ts
  */
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const dir = mkdtempSync(join(tmpdir(), "sp-patch-"));
 process.env.PI_SYSTEM_PROMPT_PATCH_DIR = dir;
@@ -301,5 +301,41 @@ const shownDefault = await showPrompt();
 assert.match(shownDefault.rows[0], /default/);
 assert.match(shownDefault.rows.join("\n"), /- Be concise in your responses/);
 assert.ok(shownDefault.notes.some((n) => n.type === "warning" && /does not apply/.test(n.message)));
+
+// 19. pi-presets: the patch follows the active preset, and the global patch is the fallback.
+const agentHome = mkdtempSync(join(tmpdir(), "sp-agent-"));
+const globalPatch = join(agentHome, "prompt-patch", "system-prompt-patch.json");
+const presetPatch = (name: string) => join(agentHome, "prompt-patch", name, "system-prompt-patch.json");
+const setPresets = (active?: string) =>
+	writeFileSync(join(agentHome, "presets.json"), JSON.stringify({ active, presets: { web: {}, work: {} } }));
+const writeOps = (file: string, ops: unknown[]) => {
+	mkdirSync(dirname(file), { recursive: true });
+	writeFileSync(file, JSON.stringify(patch(ops)));
+};
+const T = "- Be concise in your responses";
+delete process.env.PI_SYSTEM_PROMPT_PATCH_DIR;
+process.env.PI_CODING_AGENT_DIR = agentHome;
+
+// Standalone (no presets.json): the global patch applies.
+setPresets();
+writeOps(globalPatch, [{ find: T, replace: "- Standalone" }]);
+assert.match(session()()!.systemPrompt, /- Standalone/);
+
+// A preset without a patch of its own inherits the global one.
+setPresets("web");
+assert.match(session()()!.systemPrompt, /- Standalone/);
+
+// Saving under a preset forks the patch into that preset's directory only.
+result = await editPrompt(PROMPT.replace(T, "- Web only"));
+assert.equal(result.type, "info", result.message);
+assert.match(result.message, /prompt-patch[\\/]web[\\/]system-prompt-patch\.json/);
+assert.equal(session()()!.systemPrompt, PROMPT.replace(T, "- Web only"));
+assert.ok(existsSync(presetPatch("web")));
+assert.match(readFileSync(globalPatch, "utf8"), /Standalone/, "the global patch is left alone");
+
+// Another preset sees the global patch again, not the web one.
+setPresets("work");
+assert.match(session()()!.systemPrompt, /- Standalone/);
+delete process.env.PI_CODING_AGENT_DIR;
 
 console.log("system-prompt-patch: all checks passed");

@@ -36,7 +36,12 @@
  * are regenerated against the default prompt.
  *
  * The patch file is re-read when its mtime/size changes, so edits apply on the next run.
- * Data lives in `~/.pi/agent/prompt-patch/` (override with `PI_SYSTEM_PROMPT_PATCH_DIR`).
+ *
+ * Data lives in `~/.pi/agent/prompt-patch/` (override with `PI_SYSTEM_PROMPT_PATCH_DIR`,
+ * and `PI_CODING_AGENT_DIR` moves the `~/.pi/agent` part). With pi-presets installed, the
+ * patch moves to `prompt-patch/<active preset>/`, so each scenario patches its own prompt;
+ * a preset without a patch inherits the global one (`prompt-patch/system-prompt-patch.json`)
+ * until it saves, and saving there forks it.
  */
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -46,18 +51,39 @@ import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 
 const FILE = "system-prompt-patch.json";
-const DEFAULT_DIR = join(homedir(), ".pi", "agent", "prompt-patch");
+const agentDir = () => process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+const defaultDir = () => join(agentDir(), "prompt-patch");
 // Older installs kept the patch next to a loose extension in ~/.pi/agent/extensions.
-const LEGACY_DIR = join(homedir(), ".pi", "agent", "extensions");
+const legacyDir = () => join(agentDir(), "extensions");
 
-/** Where patches live: env override, then the data dir, then the legacy location if it has a patch. */
+/** Active pi-presets preset, so each scenario can keep its own patch. */
+function activePreset(): string | undefined {
+	try {
+		const config = JSON.parse(readFileSync(join(agentDir(), "presets.json"), "utf8"));
+		const active = config?.active;
+		if (typeof active !== "string" || !config?.presets?.[active]) return undefined;
+		return active.replace(/[^\w.-]/g, "_");
+	} catch {
+		return undefined;
+	}
+}
+
+/** Where patches live: env override, then this preset's dir, then the legacy location if it has a patch. */
 function dataDir(): string {
 	if (process.env.PI_SYSTEM_PROMPT_PATCH_DIR) return process.env.PI_SYSTEM_PROMPT_PATCH_DIR;
-	if (existsSync(join(LEGACY_DIR, FILE)) && !existsSync(join(DEFAULT_DIR, FILE))) return LEGACY_DIR;
-	return DEFAULT_DIR;
+	const preset = activePreset();
+	if (preset) return join(defaultDir(), preset);
+	const dir = defaultDir();
+	return existsSync(join(legacyDir(), FILE)) && !existsSync(join(dir, FILE)) ? legacyDir() : dir;
 }
 
 const patchFile = () => join(dataDir(), FILE);
+/** A preset with no patch of its own keeps inheriting the global one until it saves. */
+const patchFiles = () => {
+	const own = patchFile();
+	const inherited = join(defaultDir(), FILE);
+	return process.env.PI_SYSTEM_PROMPT_PATCH_DIR || own === inherited ? [own] : [own, inherited];
+};
 const stateFile = () => join(dataDir(), FILE.replace(/\.json$/, ".state.json"));
 
 type Op = { find?: string | string[]; replace?: string | string[]; all?: boolean };
@@ -86,21 +112,24 @@ const countOccurrences = (haystack: string, needle: string) =>
 let cache: { stamp: string; ops: Op[] } | undefined;
 
 function loadOps(): { ops: Op[]; error?: string } {
+	const file = patchFiles().find((candidate) => existsSync(candidate));
+	if (!file) return { ops: [] };
 	let stamp: string;
 	try {
-		const stat = statSync(patchFile());
-		stamp = `${stat.mtimeMs}:${stat.size}`;
+		const stat = statSync(file);
+		// The path is part of the key: switching presets changes which file is read.
+		stamp = `${file}:${stat.mtimeMs}:${stat.size}`;
 	} catch {
 		return { ops: [] };
 	}
 	if (cache?.stamp === stamp) return { ops: cache.ops };
 	try {
-		const ops: unknown = JSON.parse(readFileSync(patchFile(), "utf8")).ops;
-		if (!Array.isArray(ops)) return { ops: [], error: `${patchFile()}: "ops" must be an array` };
+		const ops: unknown = JSON.parse(readFileSync(file, "utf8")).ops;
+		if (!Array.isArray(ops)) return { ops: [], error: `${file}: "ops" must be an array` };
 		cache = { stamp, ops: ops as Op[] };
 		return { ops: cache.ops };
 	} catch (error) {
-		return { ops: [], error: `${patchFile()}: ${(error as Error).message}` };
+		return { ops: [], error: `${file}: ${(error as Error).message}` };
 	}
 }
 
